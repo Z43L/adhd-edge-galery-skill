@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10131f">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2310131f' stroke='%2376e6cb' stroke-width='2'/%3E%3Cpath d='m9 16 4.5 4.5L23.5 11' fill='none' stroke='%2376e6cb' stroke-linecap='round' stroke-linejoin='round' stroke-width='3'/%3E%3C/svg%3E">
+    <title>Focus Companion</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Ir al contenido</a>
+
+    <main id="main-content" class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">FOCUS COMPANION</p>
+          <h1>Ahora</h1>
+          <p id="date-label" class="date-label"></p>
+        </div>
+        <span class="local-badge" title="Tus datos se guardan solo en este dispositivo">
+          <span aria-hidden="true">◌</span> Local
+        </span>
+      </header>
+
+      <section class="timer-card card" aria-labelledby="timer-title">
+        <div class="card-heading timer-heading">
+          <div>
+            <p id="timer-kicker" class="section-kicker">BLOQUE DE FOCO</p>
+            <h2 id="timer-title">Un paso a la vez</h2>
+          </div>
+          <span id="timer-status" class="status-pill" aria-live="polite">Listo</span>
+        </div>
+
+        <div class="timer-layout">
+          <div id="timer-ring" class="timer-ring" style="--progress: 0" aria-label="Temporizador: 15 minutos restantes">
+            <div class="timer-core">
+              <time id="timer-display" class="timer-display" datetime="PT15M">15:00</time>
+              <span id="timer-caption" class="timer-caption">Elige un bloque</span>
+            </div>
+          </div>
+
+          <div class="timer-controls-area">
+            <label class="task-label" for="task-input">¿En qué vas a enfocarte?</label>
+            <input id="task-input" class="task-input" type="text" maxlength="140" placeholder="Opcional" autocomplete="off">
+
+            <div id="preset-controls" class="preset-controls" aria-label="Duraciones de foco">
+              <button class="preset-chip" type="button" data-focus="10" data-break="3">10 · 3</button>
+              <button class="preset-chip is-selected" type="button" data-focus="15" data-break="5">15 · 5</button>
+              <button class="preset-chip" type="button" data-focus="25" data-break="5">25 · 5</button>
+              <button id="toggle-more-options" class="text-button" type="button" aria-expanded="false" aria-controls="more-options">Más opciones</button>
+            </div>
+
+            <div id="more-options" class="more-options" hidden>
+              <div class="more-presets" aria-label="Más duraciones de foco">
+                <button class="preset-chip" type="button" data-focus="5" data-break="2">5 · 2</button>
+                <button class="preset-chip" type="button" data-focus="45" data-break="10">45 · 10</button>
+              </div>
+              <div class="custom-duration">
+                <label>Foco <input id="custom-focus" type="number" inputmode="numeric" min="1" max="180" value="15"> min</label>
+                <label>Descanso <input id="custom-break" type="number" inputmode="numeric" min="1" max="60" value="5"> min</label>
+                <button id="apply-custom-duration" class="quiet-button" type="button">Usar</button>
+              </div>
+            </div>
+
+            <div id="timer-actions" class="timer-actions">
+              <button id="start-focus" class="primary-button" type="button">
+                <span aria-hidden="true">▶</span> Empezar foco
+              </button>
+            </div>
+            <p id="timer-help" class="helper-text">15 min de foco · 5 min de descanso</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="habits-card card" aria-labelledby="habits-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">HOY</p>
+            <h2 id="habits-title">Hábitos</h2>
+          </div>
+          <span id="habits-count" class="count-badge">0 / 0</span>
+        </div>
+
+        <div id="habits-list" class="habits-list" aria-live="polite"></div>
+
+        <div class="habit-actions">
+          <button id="open-habit-form" class="secondary-button" type="button">+ Añadir hábito</button>
+          <button id="show-more-habits" class="text-button" type="button" hidden>Ver todos</button>
+        </div>
+
+        <form id="habit-form" class="habit-form" hidden>
+          <label for="habit-name">Un hábito que quieras ver hoy</label>
+          <div class="habit-form-row">
+            <input id="habit-name" name="habit-name" type="text" maxlength="80" placeholder="Ej. Tomar un vaso de agua" autocomplete="off" required>
+            <button class="primary-button compact" type="submit">Guardar</button>
+          </div>
+          <button id="cancel-habit-form" class="text-button cancel-form" type="button">Cancelar</button>
+        </form>
+      </section>
+
+      <section class="progress-card card" aria-labelledby="progress-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">TU PROGRESO</p>
+            <h2 id="progress-title">Lo que llevas hoy</h2>
+          </div>
+          <button id="toggle-week" class="text-button" type="button" aria-expanded="false" aria-controls="week-panel">Ver mi semana</button>
+        </div>
+
+        <div id="progress-summary" class="progress-summary"></div>
+        <p id="progress-note" class="helper-text"></p>
+      </section>
+
+      <section id="week-panel" class="week-card card" aria-labelledby="week-title" hidden>
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">ÚLTIMOS 7 DÍAS</p>
+            <h2 id="week-title">Mi semana</h2>
+          </div>
+          <span id="week-focus-copy" class="week-total"></span>
+        </div>
+
+        <div id="focus-chart" class="focus-chart" role="img" aria-label="Minutos de foco por día"></div>
+        <p id="week-session-copy" class="helper-text"></p>
+
+        <div class="habit-week-heading">
+          <h3>Hábitos</h3>
+          <span>Registro semanal</span>
+        </div>
+        <div id="habit-week-stats" class="habit-week-stats"></div>
+      </section>
+
+      <p id="app-message" class="app-message" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="../scripts/storage.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
