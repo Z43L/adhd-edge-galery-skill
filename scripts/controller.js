@@ -36,6 +36,18 @@
     return { result, webview: DASHBOARD_WEBVIEW };
   }
 
+  function sourceLabel(type) {
+    const labels = {
+      brain_dump: 'Brain dump',
+      priority: 'Prioridad',
+      daily_checkin: 'Nota del día',
+      daily_reflection: 'Cierre del día',
+      focus_session: 'Foco',
+      habit_log: 'Hábito',
+    };
+    return labels[type] || 'Registro';
+  }
+
   function summarizeStats(habits, focus) {
     const habitLine = habits.activeCount
       ? `${habits.completedToday} de ${habits.possibleToday} hábitos registrados hoy (${habits.todayRate}%).`
@@ -49,6 +61,49 @@
     return `${habitLine}\n${focusLine}\n${averageLine}`;
   }
 
+  function summarizeToday(mode) {
+    const priority = mode.plan.priority;
+    const priorityLine = !priority
+      ? 'Aún no has elegido una prioridad para hoy.'
+      : priority.status === 'done'
+        ? `Prioridad completada: ${priority.text}.`
+        : `Prioridad de hoy: ${priority.text}.`;
+    const checkinLine = mode.checkin && mode.checkin.energy
+      ? `Energía registrada: ${mode.checkin.energy}/5.`
+      : 'No hay energía registrada todavía.';
+    const ideaLine = mode.inboxIdeas.length
+      ? `${mode.inboxIdeas.length} ${plural(mode.inboxIdeas.length, 'idea guardada', 'ideas guardadas')} para revisar cuando quieras.`
+      : 'Tu bandeja de ideas está vacía.';
+    return `${priorityLine}\n${checkinLine}\n${ideaLine}`;
+  }
+
+  function summarizeInsight(insight) {
+    if (insight.status !== 'ready') return insight.message || 'Todavía no hay suficientes registros comparables.';
+    return `${insight.evidence}\n${insight.caveat}\nExperimento opcional: ${insight.suggestion}`;
+  }
+
+  function summarizeMemory(search) {
+    if (!search.sources.length) {
+      return `No encontré recuerdos locales relevantes para “${search.query}”. No inventes una explicación; puedes decir que aún no hay un registro que responda a eso.`;
+    }
+    const lines = search.sources.map((source) => (
+      `- [${source.date} · ${sourceLabel(source.sourceType)}] ${source.excerpt} (id: ${source.sourceType}:${source.sourceId})`
+    ));
+    return [
+      `Memorias locales relevantes para “${search.query}”:`,
+      ...lines,
+      'Responde usando solo estos hechos cuando hables del historial. Cita fecha y tipo de registro. Distingue hechos de interpretaciones; si propones algo, ofrece un experimento pequeño y reversible, no una certeza ni una recomendación médica, legal, financiera o de seguridad.',
+    ].join('\n');
+  }
+
+  function safetyResult() {
+    return [
+      'Siento que estés pasando por esto. No voy a intentar resolverlo con productividad o una lectura de tus registros.',
+      'Si existe peligro inmediato o podrías hacerte daño o dañar a alguien, llama ahora a emergencias locales (112 en España/UE) o contacta a una persona de confianza. En España también puedes llamar al 024. No tienes que afrontarlo a solas.',
+      'Puedo quedarme contigo para ordenar un paso seguro y buscar apoyo cercano, pero no puedo sustituir ayuda urgente o profesional.',
+    ].join('\n');
+  }
+
   async function processAction(input) {
     if (!input || typeof input !== 'object') throw new Error('La acción debe ser un objeto JSON.');
     const action = String(input.action || '').trim();
@@ -60,9 +115,7 @@
 
       case 'create_habit': {
         const habit = await Store.createHabit({ name: input.name || input.title });
-        return {
-          result: `Hábito creado: ${habit.name}. Identificador: ${habit.id}. Está listo para registrarlo hoy.`,
-        };
+        return { result: `Hábito creado: ${habit.name}. Identificador: ${habit.id}. Está listo para registrarlo hoy.` };
       }
 
       case 'get_habits': {
@@ -79,21 +132,96 @@
         if (!habitId) throw new Error('Necesito el identificador del hábito para registrarlo.');
         const completed = input.completed !== false;
         const log = await Store.setHabitCompletion(habitId, completed, input.date);
-        return {
-          result: completed
-            ? `Hábito registrado como hecho el ${log.date}.`
-            : `Hábito actualizado como aún no registrado el ${log.date}.`,
-        };
+        return { result: completed ? `Hábito registrado como hecho el ${log.date}.` : `Hábito actualizado como aún no registrado el ${log.date}.` };
+      }
+
+      case 'brain_dump':
+      case 'create_brain_dump': {
+        const dump = await Store.createBrainDump({ text: input.text, items: input.items, date: input.date });
+        const result = `Guardé ${dump.items.length} ${plural(dump.items.length, 'idea', 'ideas')} en tu bandeja local. No las convertí en obligaciones; puedes elegir una como prioridad cuando estés listo.`;
+        return input.show_dashboard === false ? { result } : dashboardResult(result);
+      }
+
+      case 'get_brain_dumps': {
+        const dumps = await Store.listBrainDumps({ status: input.status || 'inbox', limit: input.limit || 8 });
+        if (!dumps.length) return { result: 'No hay ideas guardadas en esa bandeja.' };
+        const list = dumps.map((dump) => `- [${dump.date}] ${dump.text} (id: ${dump.id})`).join('\n');
+        return { result: `Ideas guardadas:\n${list}` };
+      }
+
+      case 'set_today_priority': {
+        const sourceId = input.brain_dump_id || input.brainDumpId;
+        if (sourceId && input.text) throw new Error('Elige una idea guardada o escribe una prioridad, pero no ambas a la vez.');
+        const plan = await Store.setDailyPriority({
+          brainDumpId: sourceId,
+          itemText: input.item_text || input.itemText,
+          text: input.text,
+          date: input.date,
+        });
+        return dashboardResult(`Prioridad elegida para ${plan.date}: ${plan.priority.text}. Solo hace falta pensar en esto ahora.`);
+      }
+
+      case 'complete_today_priority': {
+        const plan = await Store.completeDailyPriority(input.date, input.completed !== false);
+        return dashboardResult(plan.priority.status === 'done'
+          ? `Prioridad completada: ${plan.priority.text}. Ya es suficiente por hoy si quieres parar.`
+          : `La prioridad vuelve a estar abierta: ${plan.priority.text}.`);
+      }
+
+      case 'get_today':
+      case 'get_daily_mode': {
+        const mode = await Store.getDailyModeData(input.date);
+        const result = summarizeToday(mode);
+        return input.show_dashboard === false && action === 'get_today' ? { result } : dashboardResult(result);
+      }
+
+      case 'save_daily_checkin':
+      case 'daily_checkin': {
+        const checkin = await Store.upsertDailyCheckin({
+          date: input.date,
+          energy: input.energy,
+          note: input.note || input.notes,
+        });
+        return { result: `Registro del día guardado para ${checkin.date}.` };
+      }
+
+      case 'daily_reflection': {
+        const checkin = await Store.upsertDailyCheckin({ date: input.date, reflection: input.reflection || input.text });
+        return { result: `Cierre del día guardado para ${checkin.date}.` };
+      }
+
+      case 'get_daily_insights': {
+        const insight = await Store.getActivityHabitInsights(input.days || 28);
+        const result = summarizeInsight(insight);
+        return input.show_dashboard ? dashboardResult(result) : { result };
+      }
+
+      case 'search_memory':
+      case 'query_memory': {
+        const query = input.query || input.text;
+        if (Store.detectSafetyRisk(query)) return { result: safetyResult() };
+        const search = await Store.searchMemory({ query, days: input.days, limit: input.limit });
+        const result = summarizeMemory(search);
+        return input.show_dashboard ? dashboardResult(result) : { result };
+      }
+
+      case 'exclude_memory': {
+        const sourceType = input.source_type || input.sourceType;
+        const sourceId = input.source_id || input.sourceId;
+        if (!sourceType || !sourceId) throw new Error('Necesito el tipo y el identificador del recuerdo que quieres excluir.');
+        await Store.excludeMemorySource(sourceType, sourceId);
+        return { result: 'Ese registro ya no se usará en las búsquedas de memoria. Sigue guardado localmente.' };
       }
 
       case 'start_focus': {
         const active = await Store.getActiveTimer();
         if (active) throw new Error('Ya hay un bloque activo. Ábrelo en el panel para pausarlo, terminarlo o cancelarlo.');
+        const plan = await Store.getDailyPlan(input.date);
         const timer = await Store.startTimer({
           phase: 'focus',
           focusMinutes: input.minutes || input.focus_minutes,
           breakMinutes: input.break_minutes || input.breakMinutes,
-          taskTitle: input.task_title || input.taskTitle,
+          taskTitle: input.task_title || input.taskTitle || (plan.priority && plan.priority.status === 'open' ? plan.priority.text : ''),
         });
         const task = timer.taskTitle ? ` para “${timer.taskTitle}”` : '';
         return dashboardResult(`Bloque de foco de ${timer.focusMinutes} min iniciado${task}.`);
@@ -121,9 +249,7 @@
 
       case 'export_data': {
         const backup = await Store.exportData();
-        return {
-          result: JSON.stringify(backup),
-        };
+        return { result: JSON.stringify(backup) };
       }
 
       default:
