@@ -23,6 +23,34 @@
         </span>
       </header>
 
+      <section class="priority-card card" aria-labelledby="priority-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">LO ESENCIAL DE HOY</p>
+            <h2 id="priority-title">Una cosa a la vez</h2>
+          </div>
+          <span id="priority-status" class="status-pill">Ahora</span>
+        </div>
+
+        <div id="priority-content" class="priority-content" aria-live="polite"></div>
+
+        <div class="priority-secondary-actions">
+          <button id="open-brain-dump" class="secondary-button" type="button" aria-expanded="false" aria-controls="brain-dump-form">Vaciar mente</button>
+          <button id="toggle-inbox" class="text-button" type="button" aria-expanded="false" aria-controls="inbox-ideas">Ideas guardadas</button>
+        </div>
+
+        <form id="brain-dump-form" class="brain-dump-form" hidden>
+          <label for="brain-dump-input">Escribe sin ordenar; después decides qué importa.</label>
+          <textarea id="brain-dump-input" maxlength="2000" rows="5" placeholder="Una idea o una cosa por línea"></textarea>
+          <div class="form-actions">
+            <button class="primary-button compact" type="submit">Guardar ideas</button>
+            <button id="cancel-brain-dump" class="text-button" type="button">Cancelar</button>
+          </div>
+        </form>
+
+        <div id="inbox-ideas" class="inbox-ideas" hidden></div>
+      </section>
+
       <section class="timer-card card" aria-labelledby="timer-title">
         <div class="card-heading timer-heading">
           <div>
@@ -41,7 +69,7 @@
           </div>
 
           <div class="timer-controls-area">
-            <label class="task-label" for="task-input">¿En qué vas a enfocarte?</label>
+            <label id="task-label" class="task-label" for="task-input">¿En qué vas a enfocarte?</label>
             <input id="task-input" class="task-input" type="text" maxlength="140" placeholder="Opcional" autocomplete="off">
 
             <div id="preset-controls" class="preset-controls" aria-label="Duraciones de foco">
@@ -99,6 +127,61 @@
         </form>
       </section>
 
+      <section class="daily-card card" aria-labelledby="daily-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">MODO DIARIO</p>
+            <h2 id="daily-title">Mi día</h2>
+          </div>
+          <span id="daily-summary" class="daily-summary">Sin registro</span>
+        </div>
+
+        <div class="daily-actions">
+          <button id="open-checkin" class="secondary-button" type="button" aria-expanded="false" aria-controls="checkin-form">Registrar mi día</button>
+          <button id="open-reflection" class="secondary-button" type="button" aria-expanded="false" aria-controls="reflection-form">Cerrar el día</button>
+          <button id="open-memory" class="text-button" type="button" aria-expanded="false" aria-controls="memory-form">Preguntar a mis recuerdos</button>
+        </div>
+
+        <form id="checkin-form" class="daily-form" hidden>
+          <fieldset>
+            <legend>¿Cómo está tu energía?</legend>
+            <div id="energy-options" class="energy-options" role="group" aria-label="Energía de 1 a 5">
+              <button type="button" data-energy="1" aria-pressed="false">1</button>
+              <button type="button" data-energy="2" aria-pressed="false">2</button>
+              <button type="button" data-energy="3" aria-pressed="false">3</button>
+              <button type="button" data-energy="4" aria-pressed="false">4</button>
+              <button type="button" data-energy="5" aria-pressed="false">5</button>
+            </div>
+          </fieldset>
+          <label for="daily-note">Una nota opcional</label>
+          <textarea id="daily-note" maxlength="1000" rows="3" placeholder="Ej. Empezar por algo pequeño me ayudó."></textarea>
+          <div class="form-actions">
+            <button class="primary-button compact" type="submit">Guardar mi día</button>
+            <button id="cancel-checkin" class="text-button" type="button">Cancelar</button>
+          </div>
+        </form>
+
+        <form id="reflection-form" class="daily-form" hidden>
+          <label for="daily-reflection">¿Qué te ayudó o hizo más difícil el día?</label>
+          <textarea id="daily-reflection" maxlength="1200" rows="4" placeholder="No tienes que escribir nada perfecto."></textarea>
+          <div class="form-actions">
+            <button class="primary-button compact" type="submit">Guardar cierre</button>
+            <button id="cancel-reflection" class="text-button" type="button">Cancelar</button>
+          </div>
+        </form>
+
+        <form id="memory-form" class="daily-form memory-form" hidden>
+          <label for="memory-query">Busca solo en tus registros guardados en este dispositivo</label>
+          <div class="memory-query-row">
+            <input id="memory-query" type="search" maxlength="300" placeholder="Ej. ¿Qué me ayudó cuando estuve saturado?" autocomplete="off">
+            <button class="primary-button compact" type="submit">Buscar</button>
+          </div>
+          <p class="helper-text">La pregunta no se guarda. En el chat, el agente puede usar las fuentes encontradas para responderte.</p>
+        </form>
+
+        <div id="memory-results" class="memory-results" aria-live="polite"></div>
+      </section>
+
       <section class="progress-card card" aria-labelledby="progress-title">
         <div class="card-heading">
           <div>
@@ -110,6 +193,17 @@
 
         <div id="progress-summary" class="progress-summary"></div>
         <p id="progress-note" class="helper-text"></p>
+      </section>
+
+      <section id="insight-card" class="insight-card card" aria-labelledby="insight-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">OBSERVACIÓN LOCAL</p>
+            <h2 id="insight-title">Una pista, no una regla</h2>
+          </div>
+          <button id="refresh-insight" class="text-button" type="button">Actualizar</button>
+        </div>
+        <div id="insight-content" class="insight-content" aria-live="polite"></div>
       </section>
 
       <section id="week-panel" class="week-card card" aria-labelledby="week-title" hidden>

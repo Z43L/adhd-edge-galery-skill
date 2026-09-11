@@ -32,6 +32,10 @@
     return count === 1 ? singular : pluralForm;
   }
 
+  function hasOwn(object, key) {
+    return Object.prototype.hasOwnProperty.call(object || {}, key);
+  }
+
   function dashboardResult(result) {
     return { result, webview: DASHBOARD_WEBVIEW };
   }
@@ -40,6 +44,7 @@
     const labels = {
       brain_dump: 'Brain dump',
       priority: 'Prioridad',
+      daily_energy: 'Energía',
       daily_checkin: 'Nota del día',
       daily_reflection: 'Cierre del día',
       focus_session: 'Foco',
@@ -172,21 +177,24 @@
       case 'get_daily_mode': {
         const mode = await Store.getDailyModeData(input.date);
         const result = summarizeToday(mode);
-        return input.show_dashboard === false && action === 'get_today' ? { result } : dashboardResult(result);
+        return input.show_dashboard === false ? { result } : dashboardResult(result);
       }
 
       case 'save_daily_checkin':
       case 'daily_checkin': {
-        const checkin = await Store.upsertDailyCheckin({
-          date: input.date,
-          energy: input.energy,
-          note: input.note || input.notes,
-        });
+        const patch = { date: input.date };
+        if (hasOwn(input, 'energy')) patch.energy = input.energy;
+        if (hasOwn(input, 'note')) patch.note = input.note;
+        else if (hasOwn(input, 'notes')) patch.note = input.notes;
+        const checkin = await Store.upsertDailyCheckin(patch);
         return { result: `Registro del día guardado para ${checkin.date}.` };
       }
 
       case 'daily_reflection': {
-        const checkin = await Store.upsertDailyCheckin({ date: input.date, reflection: input.reflection || input.text });
+        const patch = { date: input.date };
+        if (hasOwn(input, 'reflection')) patch.reflection = input.reflection;
+        else if (hasOwn(input, 'text')) patch.reflection = input.text;
+        const checkin = await Store.upsertDailyCheckin(patch);
         return { result: `Cierre del día guardado para ${checkin.date}.` };
       }
 

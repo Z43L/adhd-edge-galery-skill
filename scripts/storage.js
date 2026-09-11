@@ -2,11 +2,14 @@
   'use strict';
 
   const DB_NAME = 'adhd_focus_companion';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE = {
     habits: 'habits',
     habitLogs: 'habitLogs',
     pomodoroSessions: 'pomodoroSessions',
+    brainDumps: 'brainDumps',
+    dailyPlans: 'dailyPlans',
+    dailyCheckins: 'dailyCheckins',
     settings: 'settings',
   };
 
@@ -24,31 +27,55 @@
       const request = global.indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => reject(request.error || new Error('No se pudo abrir la base de datos.'));
-      request.onsuccess = () => resolve(request.result);
+      request.onblocked = () => reject(new Error('Cierra otra vista del panel para actualizar la memoria local.'));
+      request.onsuccess = () => {
+        const database = request.result;
+        database.onversionchange = () => database.close();
+        resolve(database);
+      };
       request.onupgradeneeded = (event) => {
         const database = event.target.result;
+        const transaction = event.target.transaction;
 
-        createStore(database, STORE.habits, 'id');
-        const logs = createStore(database, STORE.habitLogs, 'id');
+        getOrCreateStore(database, transaction, STORE.habits, 'id');
+        const logs = getOrCreateStore(database, transaction, STORE.habitLogs, 'id');
         if (!logs.indexNames.contains('byHabitDate')) {
           logs.createIndex('byHabitDate', ['habitId', 'date'], { unique: true });
         }
 
-        const sessions = createStore(database, STORE.pomodoroSessions, 'id');
+        const sessions = getOrCreateStore(database, transaction, STORE.pomodoroSessions, 'id');
         if (!sessions.indexNames.contains('byCompletedAt')) {
           sessions.createIndex('byCompletedAt', 'completedAt', { unique: false });
         }
 
-        createStore(database, STORE.settings, 'key');
+        const brainDumps = getOrCreateStore(database, transaction, STORE.brainDumps, 'id');
+        if (!brainDumps.indexNames.contains('byDate')) {
+          brainDumps.createIndex('byDate', 'date', { unique: false });
+        }
+        if (!brainDumps.indexNames.contains('byStatusCreatedAt')) {
+          brainDumps.createIndex('byStatusCreatedAt', ['status', 'createdAt'], { unique: false });
+        }
+
+        const dailyPlans = getOrCreateStore(database, transaction, STORE.dailyPlans, 'date');
+        if (!dailyPlans.indexNames.contains('byUpdatedAt')) {
+          dailyPlans.createIndex('byUpdatedAt', 'updatedAt', { unique: false });
+        }
+
+        const dailyCheckins = getOrCreateStore(database, transaction, STORE.dailyCheckins, 'date');
+        if (!dailyCheckins.indexNames.contains('byUpdatedAt')) {
+          dailyCheckins.createIndex('byUpdatedAt', 'updatedAt', { unique: false });
+        }
+
+        getOrCreateStore(database, transaction, STORE.settings, 'key');
       };
     });
 
     return databasePromise;
   }
 
-  function createStore(database, name, keyPath) {
+  function getOrCreateStore(database, transaction, name, keyPath) {
     if (database.objectStoreNames.contains(name)) {
-      return database.transaction(name, 'readonly').objectStore(name);
+      return transaction.objectStore(name);
     }
     return database.createObjectStore(name, { keyPath });
   }
@@ -426,6 +453,9 @@
       note: '',
       reflection: '',
       searchable: true,
+      searchableEnergy: true,
+      searchableNote: true,
+      searchableReflection: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -441,13 +471,13 @@
     const previous = (await getDailyCheckin(day)) || defaultDailyCheckin(day);
     const next = { ...previous, updatedAt: Date.now() };
 
-    if (hasOwn(input, 'energy')) {
+    if (hasOwn(input, 'energy') && input.energy !== undefined) {
       next.energy = input.energy === null || input.energy === ''
         ? null
         : clampInteger(input.energy, 1, 5, previous.energy || 3);
     }
-    if (hasOwn(input, 'note')) next.note = cleanText(input.note, 1000);
-    if (hasOwn(input, 'reflection')) next.reflection = cleanText(input.reflection, 1200);
+    if (hasOwn(input, 'note') && input.note !== undefined) next.note = cleanText(input.note, 1000);
+    if (hasOwn(input, 'reflection') && input.reflection !== undefined) next.reflection = cleanText(input.reflection, 1200);
     if (hasOwn(input, 'searchable')) next.searchable = Boolean(input.searchable);
 
     await writeOne(STORE.dailyCheckins, next);
@@ -464,7 +494,8 @@
       readAll(STORE.dailyPlans),
       readAll(STORE.dailyCheckins),
     ]);
-    const completedLogs = habitLogs.filter((log) => log.completed && allowedDates.has(log.date));
+    const logsInRange = habitLogs.filter((log) => allowedDates.has(log.date));
+    const completedLogs = logsInRange.filter((log) => log.completed);
     const sessionsByDate = new Map();
     sessions.filter((session) => session.phase === 'focus' && allowedDates.has(dateKey(session.completedAt)))
       .forEach((session) => {
@@ -480,6 +511,9 @@
     return range.map((date) => {
       const activeHabits = habits.filter((habit) => !habit.archivedAt && createdOnOrBefore(habit, date));
       const doneIds = new Set(completedLogs.filter((log) => log.date === date).map((log) => log.habitId));
+      const hasHabitLog = activeHabits.length > 0 && logsInRange.some((log) => (
+        log.date === date && activeHabits.some((habit) => habit.id === log.habitId)
+      ));
       const focus = sessionsByDate.get(date) || { minutes: 0, sessions: 0 };
       const plan = plansByDate.get(date) || null;
       const checkin = checkinsByDate.get(date) || null;
@@ -489,7 +523,9 @@
         focusSessions: focus.sessions,
         habitsPossible: activeHabits.length,
         habitsDone: activeHabits.filter((habit) => doneIds.has(habit.id)).length,
-        habitRate: activeHabits.length ? Math.round((activeHabits.filter((habit) => doneIds.has(habit.id)).length / activeHabits.length) * 100) : null,
+        habitRate: hasHabitLog
+          ? Math.round((activeHabits.filter((habit) => doneIds.has(habit.id)).length / activeHabits.length) * 100)
+          : null,
         priorityChosen: Boolean(plan && plan.priority),
         priorityDone: Boolean(plan && plan.priority && plan.priority.status === 'done'),
         energy: checkin && Number.isInteger(checkin.energy) ? checkin.energy : null,
@@ -615,6 +651,7 @@
       score += matches ? 1 + Math.min(matches - 1, 2) * 0.3 : 0;
     });
     if (normalizedQuery.length > 3 && normalized.includes(normalizedQuery)) score += 2.5;
+    if (score <= 0) return 0;
     const date = parseDateKey(document.date);
     if (date) {
       const age = Math.max(0, Math.round((Date.now() - date.getTime()) / 86400000));
@@ -657,7 +694,15 @@
       });
     });
     checkins.filter((entry) => entry.searchable !== false && entry.date >= earliest).forEach((entry) => {
-      if (entry.note) documents.push({
+      if (Number.isInteger(entry.energy) && entry.searchableEnergy !== false) documents.push({
+        id: `energy:${entry.date}`,
+        sourceType: 'daily_energy',
+        sourceId: entry.date,
+        date: entry.date,
+        title: 'Energía del día',
+        text: `Energía registrada: ${entry.energy}/5.`,
+      });
+      if (entry.note && entry.searchableNote !== false) documents.push({
         id: `checkin:${entry.date}`,
         sourceType: 'daily_checkin',
         sourceId: entry.date,
@@ -665,7 +710,7 @@
         title: 'Nota del día',
         text: entry.note,
       });
-      if (entry.reflection) documents.push({
+      if (entry.reflection && entry.searchableReflection !== false) documents.push({
         id: `reflection:${entry.date}`,
         sourceType: 'daily_reflection',
         sourceId: entry.date,
@@ -722,6 +767,7 @@
     const mappings = {
       brain_dump: STORE.brainDumps,
       priority: STORE.dailyPlans,
+      daily_energy: STORE.dailyCheckins,
       daily_checkin: STORE.dailyCheckins,
       daily_reflection: STORE.dailyCheckins,
       focus_session: STORE.pomodoroSessions,
@@ -735,6 +781,12 @@
     let updated;
     if (sourceType === 'priority') {
       updated = { ...record, priority: { ...record.priority, searchable: false }, updatedAt: Date.now() };
+    } else if (sourceType === 'daily_energy') {
+      updated = { ...record, searchableEnergy: false, updatedAt: Date.now() };
+    } else if (sourceType === 'daily_checkin') {
+      updated = { ...record, searchableNote: false, updatedAt: Date.now() };
+    } else if (sourceType === 'daily_reflection') {
+      updated = { ...record, searchableReflection: false, updatedAt: Date.now() };
     } else {
       updated = { ...record, searchable: false, updatedAt: Date.now() };
     }
